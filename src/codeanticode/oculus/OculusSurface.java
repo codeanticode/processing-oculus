@@ -90,11 +90,6 @@ public class OculusSurface implements PSurface {
 
   float[] currentPixelScale = {0, 0};
 
-  boolean presentMode = false;
-  float offsetX;
-  float offsetY;
-
-
   public OculusSurface(PGraphics graphics) {
     this.graphics = graphics;
     this.pgl = (PJOGL) ((PGraphicsOpenGL)graphics).pgl;
@@ -607,11 +602,9 @@ public class OculusSurface implements PSurface {
 //    if (presentMode) {
 //      System.err.println("Present mode");
 //    System.err.println("WILL USE FBO");
-    presentMode = pgl.presentMode = true;
-    offsetX = pgl.offsetX = 0.5f * (screenRect.width - sketchWidth);
-    offsetY = pgl.offsetY = 0.5f * (screenRect.height - sketchHeight);
-    pgl.requestFBOLayer();
-
+    pgl.initPresentMode(0.5f * (screenRect.width - sketchWidth), 
+                        0.5f * (screenRect.height - sketchHeight));
+    
     window.setSize(screenRect.width, screenRect.height);
     PApplet.hideMenuBar();
     window.setTopLevelPosition(sketchX + screenRect.x,
@@ -712,7 +705,7 @@ public class OculusSurface implements PSurface {
 //    if (animator.isAnimating()) {
 //      System.err.println("3. set size");
 
-      if (!presentMode) {
+      if (!pgl.presentMode()) {
 //        sketch.width = width;
 //        sketch.height = height;
         sketch.setSize(width, height);
@@ -991,32 +984,20 @@ public class OculusSurface implements PSurface {
     window.getCurrentSurfaceScale(currentPixelScale);
     int sx = (int)(nativeEvent.getX()/currentPixelScale[0]);
     int sy = (int)(nativeEvent.getY()/currentPixelScale[1]);
-    int mx = sx - (int)offsetX;
-    int my = sy - (int)offsetY;
+    int mx = sx;
+    int my = sy;
 
-    if (presentMode) {
+    if (pgl.presentMode()) {
+      mx -= (int)pgl.presentX;
+      my -= (int)pgl.presentY;
       if (peAction == KeyEvent.RELEASE &&
-          20 < sx && sx < 20 + 100 &&
-          screenRect.height - 70 < sy && sy < screenRect.height - 20) {
-//        System.err.println("clicked on exit button");
-//      if (externalMessages) {
-//        System.err.println(PApplet.EXTERNAL_QUIT);
-//        System.err.flush();  // important
-//      }
-//        animator.stop();
+          pgl.insideCloseButton(sx, sy - screenRect.height)) {
         sketch.exit();
-//        window.destroy();
       }
-
       if (mx < 0 || sketchWidth < mx || my < 0 || sketchHeight < my) {
         return;
       }
     }
-
-//    if (!graphics.is2X() && 1 < hasSurfacePixelScale[0]) {
-//      x /= 2;
-//      y /= 2;
-//    }
 
     MouseEvent me = new MouseEvent(nativeEvent, nativeEvent.getWhen(),
                                    peAction, peModifiers,
