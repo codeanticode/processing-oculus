@@ -42,10 +42,10 @@ import com.jogamp.opengl.util.stereo.StereoDevice;
 import com.jogamp.opengl.util.stereo.StereoDeviceRenderer;
 import com.jogamp.opengl.util.stereo.StereoDeviceFactory;
 import com.jogamp.opengl.util.stereo.EyeParameter;
-import com.jogamp.opengl.util.stereo.EyePose;
 import com.jogamp.opengl.util.stereo.StereoClientRenderer;
 import com.jogamp.opengl.util.stereo.StereoGLEventListener;
 import com.jogamp.opengl.util.stereo.StereoUtil;
+import com.jogamp.opengl.util.stereo.ViewerPose;
 
 import jogamp.opengl.util.stereo.GenericStereoDevice;
 import processing.core.PApplet;
@@ -300,12 +300,11 @@ public class OculusSurface implements PSurface {
     final Screen screen = monitor.getScreen();
 
     
-    /*
     // Start the sensor which provides the Rift’s pose and motion, needs JOGL 2.3.2
     if( !stereoDevice.startSensors(stereoDevice.getSupportedSensorBits(), 0) ) {
         System.err.println("Could not start sensors on device "+deviceIndex);
     }
-    */
+
 
     
     
@@ -833,7 +832,7 @@ public class OculusSurface implements PSurface {
     }
     @Override
     public void reshapeForEye(GLAutoDrawable arg0, int arg1, int arg2, int arg3,
-        int arg4, EyeParameter arg5, EyePose arg6) {
+        int arg4, EyeParameter arg5, ViewerPose arg6) {
       // TODO Auto-generated method stub
       
     }
@@ -1152,5 +1151,12 @@ public class OculusSurface implements PSurface {
     if (window != null) {
       window.setPointerVisible(false);
     }
+  }
+
+
+  @Override
+  public void setAlwaysOnTop(boolean always) {
+    // TODO Auto-generated method stub
+    
   }
 }
