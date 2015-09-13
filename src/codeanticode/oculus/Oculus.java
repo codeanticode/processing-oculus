@@ -43,19 +43,8 @@ public class Oculus extends PGraphicsOpenGL {
   public PSurface createSurface() {  // ignore
     return new OculusSurface(this);
   }  
-  
-  public float getPixelScale() {
-    PSurface surf = parent.getSurface();
-    if (surf == null) {
-      return pixelDensity;
-    } else if (surf instanceof OculusSurface) {
-      return ((OculusSurface)surf).getPixelScale();
-    } else {
-      throw new RuntimeException("Renderer cannot find an Oculus surface");
-    }
-  }  
-  
 
+  
   //////////////////////////////////////////////////////////////
 
   // RENDERER SUPPORT QUERIES
