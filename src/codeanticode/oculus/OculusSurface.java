@@ -1,36 +1,19 @@
 package codeanticode.oculus;
 
-import java.awt.Component;
-import java.awt.GraphicsDevice;
-import java.awt.GraphicsEnvironment;
 //import java.awt.Dimension;
 //import java.awt.Point;
 //import java.awt.Frame;
-import java.awt.Rectangle;
-import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.List;
-
-import com.jogamp.common.util.IOUtil.ClassResources;
-import com.jogamp.nativewindow.NativeSurface;
 //import com.jogamp.nativewindow.ScalableSurface;
 import com.jogamp.nativewindow.util.DimensionImmutable;
 import com.jogamp.nativewindow.util.PointImmutable;
 import com.jogamp.opengl.GL;
 import com.jogamp.opengl.GLAnimatorControl;
 import com.jogamp.opengl.GLAutoDrawable;
-import com.jogamp.opengl.GLCapabilities;
 //import com.jogamp.opengl.GLEventListener;
-import com.jogamp.opengl.GLException;
-import com.jogamp.opengl.GLProfile;
 import com.jogamp.opengl.math.FovHVHalves;
-import com.jogamp.nativewindow.MutableGraphicsConfiguration;
-import com.jogamp.newt.Display;
 import com.jogamp.newt.MonitorDevice;
-import com.jogamp.newt.NewtFactory;
 import com.jogamp.newt.Screen;
-import com.jogamp.newt.awt.NewtCanvasAWT;
-import com.jogamp.newt.event.InputEvent;
 //import com.jogamp.newt.event.WindowAdapter;
 //import com.jogamp.newt.event.WindowEvent;
 import com.jogamp.newt.opengl.GLWindow;
@@ -49,205 +32,11 @@ import com.jogamp.opengl.util.stereo.ViewerPose;
 
 import jogamp.opengl.util.stereo.GenericStereoDevice;
 import processing.core.PApplet;
-import processing.core.PConstants;
 import processing.core.PGraphics;
-import processing.core.PImage;
-import processing.core.PSurface;
-import processing.event.KeyEvent;
-import processing.event.MouseEvent;
-import processing.opengl.PGraphicsOpenGL;
 import processing.opengl.PGL;
-import processing.opengl.PJOGL;
+import processing.opengl.PSurfaceJOGL;
 
-public class OculusSurface implements PSurface {
-  /** Selected GL profile */
-  public static GLProfile profile;
-
-  PJOGL pgl;
-
-  GLWindow window;
-  FPSAnimator animator;
-  Rectangle screenRect;
-
-  PApplet sketch;
-  PGraphics graphics;
-
-  int sketchX;
-  int sketchY;
-  int sketchWidth;
-  int sketchHeight;
-
-  Display display;
-  Screen screen;
-  List<MonitorDevice> monitors;
-  MonitorDevice displayDevice;
-  Throwable drawException;
-  Object waitObject = new Object();
-
-  NewtCanvasAWT canvas;
-  boolean placedWindow = false;
-  boolean requestedStart = false;
-
-  float[] currentPixelScale = {0, 0};
-
-  public OculusSurface(PGraphics graphics) {
-    this.graphics = graphics;
-    this.pgl = (PJOGL) ((PGraphicsOpenGL)graphics).pgl;
-  }
-
-
-  public void initOffscreen(PApplet sketch) {
-    this.sketch = sketch;
-
-    sketchWidth = sketch.sketchWidth();
-    sketchHeight = sketch.sketchHeight();
-
-    if (window != null) {
-      canvas = new NewtCanvasAWT(window);
-      canvas.setBounds(0, 0, window.getWidth(), window.getHeight());
-      canvas.setFocusable(true);
-    }
-  }
-
-
-  public void initFrame(PApplet sketch) {/*, int backgroundColor,
-                        int deviceIndex, boolean fullScreen,
-                        boolean spanDisplays) {*/
-    this.sketch = sketch;
-    initIcons();
-    initScreen();
-    initGL();
-    initWindow();
-    initListeners();
-    initAnimator();
-  }
-
-
-  public Object getNative() {
-//    if (canvas == null) {
-//      initOffscreen(sketch);
-//    }
-//    return canvas;
-    return window;
-  }
-
-
-  protected void initScreen() {
-    display = NewtFactory.createDisplay(null);
-    display.addReference();
-    screen = NewtFactory.createScreen(display, 0);
-    screen.addReference();
-
-    monitors = new ArrayList<MonitorDevice>();
-    GraphicsEnvironment environment = GraphicsEnvironment.getLocalGraphicsEnvironment();
-    GraphicsDevice[] awtDevices = environment.getScreenDevices();
-    List<MonitorDevice> newtDevices = screen.getMonitorDevices();
-
-    // AWT and NEWT name devices in different ways, depending on the platform,
-    // and also appear to order them in different ways. The following code
-    // tries to address the differences.
-    if (PApplet.platform == PConstants.LINUX) {
-      for (GraphicsDevice device: awtDevices) {
-        String did = device.getIDstring();
-        String[] parts = did.split("\\.");
-        String id1 = "";
-        if (1 < parts.length) {
-          id1 = parts[1].trim();
-        }
-        MonitorDevice monitor = null;
-        int id0 = newtDevices.size() > 0 ? newtDevices.get(0).getId() : 0;
-        for (int i = 0; i < newtDevices.size(); i++) {
-          MonitorDevice mon = newtDevices.get(i);
-          String mid = String.valueOf(mon.getId() - id0);
-          if (id1.equals(mid)) {
-            monitor = mon;
-            break;
-          }
-        }
-        if (monitor != null) {
-          monitors.add(monitor);
-        }
-      }
-    } else { // All the other platforms...
-      for (GraphicsDevice device: awtDevices) {
-        String did = device.getIDstring();
-        String[] parts = did.split("Display");
-        String id1 = "";
-        if (1 < parts.length) {
-          id1 = parts[1].trim();
-        }
-        MonitorDevice monitor = null;
-        for (int i = 0; i < newtDevices.size(); i++) {
-          MonitorDevice mon = newtDevices.get(i);
-          String mid = String.valueOf(mon.getId());
-          if (id1.equals(mid)) {
-            monitor = mon;
-            break;
-          }
-        }
-        if (monitor == null) {
-          // Didn't find a matching monitor, try using less stringent id check
-          for (int i = 0; i < newtDevices.size(); i++) {
-            MonitorDevice mon = newtDevices.get(i);
-            String mid = String.valueOf(mon.getId());
-            if (-1 < did.indexOf(mid)) {
-              monitor = mon;
-              break;
-            }
-          }
-        }
-        if (monitor != null) {
-          monitors.add(monitor);
-        }
-      }
-    }
-  }
-
-  protected void initGL() {
-//  System.out.println("*******************************");
-    if (profile == null) {
-      if (PJOGL.profile == 2) {
-        try {
-          profile = GLProfile.getGL2ES2();
-        } catch (GLException ex) {
-          profile = GLProfile.getMaxProgrammable(true);
-        }
-      } else if (PJOGL.profile == 3) {
-        try {
-          profile = GLProfile.getGL2GL3();
-        } catch (GLException ex) {
-          profile = GLProfile.getMaxProgrammable(true);
-        }
-        if (!profile.isGL3()) {
-          PGraphics.showWarning("Requested profile GL3 but is not available, got: " + profile);
-        }
-      } else if (PJOGL.profile == 4) {
-        try {
-          profile = GLProfile.getGL4ES3();
-        } catch (GLException ex) {
-          profile = GLProfile.getMaxProgrammable(true);
-        }
-        if (!profile.isGL4()) {
-          PGraphics.showWarning("Requested profile GL4 but is not available, got: " + profile);
-        }
-      } else throw new RuntimeException(PGL.UNSUPPORTED_GLPROF_ERROR);
-    }
-
-    // Setting up the desired capabilities;
-    GLCapabilities caps = new GLCapabilities(profile);
-    caps.setAlphaBits(PGL.REQUESTED_ALPHA_BITS);
-    caps.setDepthBits(PGL.REQUESTED_DEPTH_BITS);
-    caps.setStencilBits(PGL.REQUESTED_STENCIL_BITS);
-
-//  caps.setPBuffer(false);
-//  caps.setFBO(false);
-
-    caps.setSampleBuffers(true);
-    caps.setNumSamples(PGL.smoothToSamples(graphics.smooth));
-    caps.setBackgroundOpaque(true);
-    caps.setOnscreen(true);    
-    pgl.setCaps(caps);
-  }
+public class OculusSurface extends PSurfaceJOGL {
 
   // from https://github.com/sgothel/jogl/blob/master/src/test/com/jogamp/opengl/test/junit/jogl/stereo/StereoDemo01.java
   static boolean useStereoScreen = true;
@@ -264,8 +53,14 @@ public class OculusSurface implements PSurface {
   static StereoDeviceFactory.DeviceType deviceType = StereoDeviceFactory.DeviceType.Default;
   static int deviceIndex = 0;
   StereoDevice stereoDevice;
-  protected void initWindow() {    
 
+  
+  public OculusSurface(PGraphics graphics) {
+    super(graphics);
+  }
+
+
+  protected void initWindow() {
     int posx = -1;
     int posy = -1;
 
@@ -304,10 +99,6 @@ public class OculusSurface implements PSurface {
     if( !stereoDevice.startSensors(stereoDevice.getSupportedSensorBits(), 0) ) {
         System.err.println("Could not start sensors on device "+deviceIndex);
     }
-
-
-    
-    
     
     window = GLWindow.create(screen, pgl.getCaps());
     /*
@@ -399,13 +190,6 @@ public class OculusSurface implements PSurface {
     }
     */
     PApplet.hideMenuBar();
-    
-
-
-
-   
-    
-
   }
 
 
@@ -417,7 +201,7 @@ public class OculusSurface implements PSurface {
     NEWTWindowListener winListener = new NEWTWindowListener();
     window.addWindowListener(winListener);
 
-    DrawListener drawlistener = new DrawListener();
+    DrawListenerStereo drawlistener = new DrawListenerStereo();
     window.addGLEventListener(drawlistener);
     
     
@@ -505,43 +289,6 @@ public class OculusSurface implements PSurface {
 
 
   @Override
-  public void setTitle(String title) {
-    window.setTitle(title);
-  }
-
-
-  @Override
-  public void setVisible(boolean visible) {
-    window.setVisible(visible);
-  }
-
-
-  @Override
-  public void setResizable(boolean resizable) {
-    // TODO Auto-generated method stub
-  }
-
-
-  public void setIcon(PImage icon) {
-    // TODO Auto-generated method stub
-  }
-
-
-  protected void initIcons() {
-    final int[] sizes = { 16, 32, 48, 64, 128, 256, 512 };
-    String[] iconImages = new String[sizes.length];
-    for (int i = 0; i < sizes.length; i++) {
-      iconImages[i] = "/icon/icon-" + sizes[i] + ".png";
-    }
-    NewtFactory.setWindowIcons(new ClassResources(PApplet.class, iconImages));
-  }
-
-
-//  private void setFrameCentered() {
-//  }
-
-
-  @Override
   public void placeWindow(int[] location, int[] editorLocation) {
     /*
     int x = window.getX() - window.getInsets().getLeftWidth();
@@ -588,182 +335,34 @@ public class OculusSurface implements PSurface {
     }
 */
     
-    placedWindow = true;
-    if (requestedStart) startThread();
+
 //    canvas.setBounds((contentW - sketchWidth)/2,
 //                     (contentH - sketchHeight)/2,
 //                     sketchWidth, sketchHeight);
   }
 
-
-  public void placePresent(int stopColor) {
-
-//    if (presentMode) {
-//      System.err.println("Present mode");
-//    System.err.println("WILL USE FBO");
-    pgl.initPresentMode(0.5f * (screenRect.width - sketchWidth), 
-                        0.5f * (screenRect.height - sketchHeight));
-    
-    window.setSize(screenRect.width, screenRect.height);
-    PApplet.hideMenuBar();
-    window.setTopLevelPosition(sketchX + screenRect.x,
-                               sketchY + screenRect.y);
-//    window.setTopLevelPosition(0, 0);
-    window.setFullscreen(true);
-
-
-    placedWindow = true;
-    if (requestedStart) startThread();
-
-//    }
-  }
-
-
-  public void setupExternalMessages() {
-    // TODO Auto-generated method stub
-
-  }
-
-
+  
   public void startThread() {
     if (animator != null) {
-      if (placedWindow) {
-        window.setVisible(true);
-        animator.start();
-        requestedStart = false;
-        
-        
-        // Correct window size to actual pixel size,
-        // which ration is unknown before window creation when using multiple displays!
-        final PointImmutable devicePos = stereoDevice.getPosition();
-        final DimensionImmutable deviceRes = stereoDevice.getSurfaceSize();
-        System.err.println("Window.0.windowSize : "+window.getWidth()+" x "+window.getHeight());
-        System.err.println("Window.0.surfaceSize: "+window.getSurfaceWidth()+" x "+window.getSurfaceHeight());
-        window.setSurfaceSize(deviceRes.getWidth(), deviceRes.getHeight());
-        if( useStereoScreen ) {
-            window.setPosition(devicePos.getX(), devicePos.getY());
-        }
-        System.err.println("Window.1.windowSize : "+window.getWidth()+" x "+window.getHeight());
-        System.err.println("Window.1.surfaceSize: "+window.getSurfaceWidth()+" x "+window.getSurfaceHeight());        
-      } else {
-        // The GL window is not visible until it has been placed, so we cannot
-        // start the animator because it requires the window to be visible.
-        requestedStart = true;
-        // Need this assignment to bypass the while loop in runSketch, otherwise
-        // the programs hangs waiting for defaultSize to be false, but it never
-        // happens because the animation thread is not yet running to avoid showing
-        // the window in the wrong place:
-        // https://github.com/processing/processing/issues/3308
-//      sketch.defaultSize = false;
-      }
-    }
-  }
-
-  public void pauseThread() {
-    if (animator != null) {
-      animator.pause();
-    }
-  }
-
-  public void resumeThread() {
-    if (animator != null) {
-      animator.resume();
-    }
-  }
-
-  public boolean stopThread() {
-    if (animator != null) {
-      return animator.stop();
-    } else {
-      return false;
-    }
-  }
-
-  public boolean isStopped() {
-    if (animator != null) {
-      return !animator.isAnimating();
-    } else {
-      return true;
-    }
-  }
-
-
-  public void setLocation(int x, int y) {
-    if (window != null) {
-      window.setTopLevelPosition(x, y);
-    }
-  }
-
-
-  public void setSize(int width, int height) {
-    if (width == sketch.width && height == sketch.height) {
-      return;
-    }
-
-
-//    if (animator.isAnimating()) {
-//      System.err.println("3. set size");
-
-      if (!pgl.presentMode()) {
-//        sketch.width = width;
-//        sketch.height = height;
-        sketch.setSize(width, height);
-        sketchWidth = width;
-        sketchHeight = height;
-        graphics.setSize(width, height);
-        window.setSize(width, height);
-      }
-
-
-//    }
-  }
-
-  public float getPixelScale() {
-    if (graphics.is2X()) {
-      // Even if the graphics are retina, the user might have moved the window
-      // into a non-retina monitor, so we need to check
-      window.getCurrentSurfaceScale(currentPixelScale);
-      return currentPixelScale[0];
-    } else {
-      return 1;
-    }
-  }
-
-  public Component getComponent() {
-    return canvas;
-  }
-
-  public void setSmooth(int level) {
-    pgl.reqNumSamples = level;
-    GLCapabilities caps = new GLCapabilities(profile);
-    caps.setAlphaBits(PGL.REQUESTED_ALPHA_BITS);
-    caps.setDepthBits(PGL.REQUESTED_DEPTH_BITS);
-    caps.setStencilBits(PGL.REQUESTED_STENCIL_BITS);
-    caps.setSampleBuffers(true);
-    caps.setNumSamples(pgl.reqNumSamples);
-    caps.setBackgroundOpaque(true);
-    caps.setOnscreen(true);
-    NativeSurface target = window.getNativeSurface();
-    MutableGraphicsConfiguration config = (MutableGraphicsConfiguration) target.getGraphicsConfiguration();
-    config.setChosenCapabilities(caps);
-  }
-
-  public void setFrameRate(float fps) {
-    if (animator != null) {
-      animator.stop();
-      animator.setFPS((int)fps);
-      pgl.setFps(fps);
       animator.start();
+      
+      // Correct window size to actual pixel size,
+      // which ration is unknown before window creation when using multiple displays!
+      final PointImmutable devicePos = stereoDevice.getPosition();
+      final DimensionImmutable deviceRes = stereoDevice.getSurfaceSize();
+      System.err.println("Window.0.windowSize : "+window.getWidth()+" x "+window.getHeight());
+      System.err.println("Window.0.surfaceSize: "+window.getSurfaceWidth()+" x "+window.getSurfaceHeight());
+      window.setSurfaceSize(deviceRes.getWidth(), deviceRes.getHeight());
+      if( useStereoScreen ) {
+          window.setPosition(devicePos.getX(), devicePos.getY());
+      }
+      System.err.println("Window.1.windowSize : "+window.getWidth()+" x "+window.getHeight());
+      System.err.println("Window.1.surfaceSize: "+window.getSurfaceWidth()+" x "+window.getSurfaceHeight());              
     }
   }
 
-  public void requestFocus() {
-    if (window != null) {
-      window.requestFocus();
-    }
-  }
 
-  class DrawListener implements StereoGLEventListener {
+  class DrawListenerStereo implements StereoGLEventListener {
     public void display(GLAutoDrawable drawable) {
       pgl.getGL(drawable);
 //      System.out.println(" - " + sketch.frameCount);
@@ -838,6 +437,7 @@ public class OculusSurface implements PSurface {
     }
   }
 
+  /*
   protected class NEWTWindowListener implements com.jogamp.newt.event.WindowListener {
     public NEWTWindowListener() {
       super();
@@ -1112,51 +712,7 @@ public class OculusSurface implements PSurface {
     }
     return def;
   }
+*/
 
 
-  // . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . .
-
-
-  public void setCursor(int kind) {
-    PGraphics.showWarning("Cursor types not yet supported in OpenGL, provide your cursor image");
-  }
-
-
-  public void setCursor(PImage image, int hotspotX, int hotspotY) {
-    final Display disp = window.getScreen().getDisplay();
-    disp.createNative();
-
-//    BufferedImage jimg = (BufferedImage)image.getNative();
-//    IntBuffer buf = IntBuffer.wrap(jimg.getRGB(0, 0, jimg.getWidth(), jimg.getHeight(),
-//                                               null, 0, jimg.getWidth()));
-//
-//    final PixelRectangle pixelrect = new PixelRectangle.GenericPixelRect(srcFmt, new Dimension(width, height),
-//        srcStrideBytes, srcIsGLOriented, srcPixels);
-//
-//    PointerIcon pi = disp.createPointerIcon(PixelRectangle pixelrect,
-//                                            hotspotX,
-//                                            hotspotY);
-//
-//    window.setPointerIcon(pi);
-
-  }
-
-  public void showCursor() {
-    if (window != null) {
-      window.setPointerVisible(true);
-    }
-  }
-
-  public void hideCursor() {
-    if (window != null) {
-      window.setPointerVisible(false);
-    }
-  }
-
-
-  @Override
-  public void setAlwaysOnTop(boolean always) {
-    // TODO Auto-generated method stub
-    
-  }
 }
