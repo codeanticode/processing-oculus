@@ -147,6 +147,11 @@ ${line}
 		<copy todir="${project.bin.data}">
 			<fileset dir="${project.data}" excludes="README" />
 		</copy>
+        <copy todir="bin">
+          <fileset dir="src">
+            <include name="oculus/shaders/*.glsl" />
+          </fileset>
+        </copy>
 	</target>
 	
 	
