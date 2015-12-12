@@ -18,9 +18,13 @@ import com.jogamp.newt.Screen;
 //import com.jogamp.newt.event.WindowEvent;
 import com.jogamp.newt.opengl.GLWindow;
 import com.jogamp.newt.opengl.util.stereo.StereoDeviceUtil;
+//import com.jogamp.opengl.test.junit.jogl.demos.es2.av.MovieSBSStereo;
+//import com.jogamp.opengl.test.junit.jogl.demos.es2.av.MovieSimple;
+import com.jogamp.opengl.util.Animator;
 import com.jogamp.opengl.util.AnimatorBase;
 import com.jogamp.opengl.util.FPSAnimator;
 
+import com.jogamp.opengl.util.av.GLMediaPlayer;
 import com.jogamp.opengl.util.stereo.StereoDevice;
 import com.jogamp.opengl.util.stereo.StereoDeviceRenderer;
 import com.jogamp.opengl.util.stereo.StereoDeviceFactory;
@@ -50,10 +54,10 @@ public class OculusSurface extends PSurfaceJOGL {
   static boolean useAutoSwap = false;
 //  static String useFilmFile = null;
 //  static String useFilmURI = null;
-  static StereoDeviceFactory.DeviceType deviceType = StereoDeviceFactory.DeviceType.Default;
+  static StereoDeviceFactory.DeviceType deviceType = StereoDeviceFactory.DeviceType.OculusVR;
   static int deviceIndex = 0;
   StereoDevice stereoDevice;
-
+  Animator animator2;
   
   public OculusSurface(PGraphics graphics) {
     super(graphics);
@@ -132,7 +136,7 @@ public class OculusSurface extends PSurfaceJOGL {
     }
     window.setSurfaceSize(deviceRes.getWidth(), deviceRes.getHeight());
     window.setAutoSwapBufferMode(useAutoSwap);
-    window.setUndecorated(true);    
+//    window.setUndecorated(true);    
 
     // Set the displayWidth/Height variables inside PApplet, so that they're
     // usable and can even be returned by the sketchWidth()/Height() methods.
@@ -189,22 +193,13 @@ public class OculusSurface extends PSurfaceJOGL {
       }
     }
     */
+
     PApplet.hideMenuBar();
+    window.setFullscreen(true);
   }
 
 
   protected void initListeners() {
-    NEWTMouseListener mouseListener = new NEWTMouseListener();
-    window.addMouseListener(mouseListener);
-    NEWTKeyListener keyListener = new NEWTKeyListener();
-    window.addKeyListener(keyListener);
-    NEWTWindowListener winListener = new NEWTWindowListener();
-    window.addWindowListener(winListener);
-
-    DrawListenerStereo drawlistener = new DrawListenerStereo();
-    window.addGLEventListener(drawlistener);
-    
-    
     //
     // Stereo Device Setup
     //
@@ -239,17 +234,27 @@ public class OculusSurface extends PSurfaceJOGL {
     System.err.println("StereoDeviceRenderer: "+stereoDeviceRenderer);    
     final int texFilter = biLinear ? GL.GL_LINEAR : GL.GL_NEAREST;
     final StereoClientRenderer renderer = new StereoClientRenderer(stereoDeviceRenderer, true /* ownsDist */, texFilter, texFilter, numSamples);
+    DrawListenerStereo drawlistener = new DrawListenerStereo();
     renderer.addGLEventListener(drawlistener);
-    window.addGLEventListener(renderer);    
+    window.addGLEventListener(renderer);
+
+    NEWTMouseListener mouseListener = new NEWTMouseListener();
+    window.addMouseListener(mouseListener);
+    NEWTKeyListener keyListener = new NEWTKeyListener();
+    window.addKeyListener(keyListener);
+    NEWTWindowListener winListener = new NEWTWindowListener();
+    window.addWindowListener(winListener);
   }
 
 
   protected void initAnimator() {
 //  System.err.println("1. create animator");
-    animator = new FPSAnimator(window, 60);
-    animator.setModeBits(false, AnimatorBase.MODE_EXPECT_AWT_RENDERING_THREAD);
+    animator2 = new Animator();
+    animator2.setModeBits(false, AnimatorBase.MODE_EXPECT_AWT_RENDERING_THREAD);
+    animator2.setExclusiveContext(false);
     drawException = null;
-    animator.setUncaughtExceptionHandler(new GLAnimatorControl.UncaughtExceptionHandler() {
+
+    animator2.setUncaughtExceptionHandler(new GLAnimatorControl.UncaughtExceptionHandler() {
       @Override
       public void uncaughtException(final GLAnimatorControl animator,
                                     final GLAutoDrawable drawable,
@@ -343,9 +348,12 @@ public class OculusSurface extends PSurfaceJOGL {
 
   
   public void startThread() {
-    if (animator != null) {
-      animator.start();
-      
+    if (animator2 != null) {
+      window.setVisible(true);
+      animator2.add(window);
+      animator2.setUpdateFPSFrames(60, System.err);
+      animator2.start();
+
       // Correct window size to actual pixel size,
       // which ration is unknown before window creation when using multiple displays!
       final PointImmutable devicePos = stereoDevice.getPosition();
@@ -354,7 +362,9 @@ public class OculusSurface extends PSurfaceJOGL {
       System.err.println("Window.0.surfaceSize: "+window.getSurfaceWidth()+" x "+window.getSurfaceHeight());
       window.setSurfaceSize(deviceRes.getWidth(), deviceRes.getHeight());
       if( useStereoScreen ) {
-          window.setPosition(devicePos.getX(), devicePos.getY());
+        int x = devicePos.getX();
+        int y = devicePos.getY();
+        window.setPosition(x, y);
       }
       System.err.println("Window.1.windowSize : "+window.getWidth()+" x "+window.getHeight());
       System.err.println("Window.1.surfaceSize: "+window.getSurfaceWidth()+" x "+window.getSurfaceHeight());              
@@ -363,14 +373,20 @@ public class OculusSurface extends PSurfaceJOGL {
 
 
   class DrawListenerStereo implements StereoGLEventListener {
+    @Override
     public void display(GLAutoDrawable drawable) {
       pgl.getGL(drawable);
 //      System.out.println(" - " + sketch.frameCount);
-      sketch.handleDraw();
-
-      if (sketch.frameCount == 1) {
+      if (sketch.frameCount == 0) {
         requestFocus();
       }
+
+      pgl.clearColor(1, 0, 0, 1);
+      pgl.clear(PGL.COLOR_BUFFER_BIT);
+
+      pgl.finish();
+      
+      //sketch.handleDraw();
 
       if (sketch.exitCalled()) {
 //        System.out.println("exit");
@@ -425,15 +441,28 @@ public class OculusSurface extends PSurfaceJOGL {
       setSize((int)(w/currentPixelScale[0]), (int)(h/currentPixelScale[1]));
     }
     @Override
-    public void display(GLAutoDrawable arg0, int arg1) {
-      // TODO Auto-generated method stub
+    public void display(GLAutoDrawable drawable, int arg1) {
+      pgl.getGL(drawable);
+//      System.out.println(" - " + sketch.frameCount);
+      if (sketch.frameCount == 0) {
+        requestFocus();
+      }
+
+      sketch.handleDraw();
+
+      if (sketch.exitCalled()) {
+//        System.out.println("exit");
+        animator.stop();
+        sketch.dispose();
+        sketch.exitActual();
+      }
       
     }
     @Override
-    public void reshapeForEye(GLAutoDrawable arg0, int arg1, int arg2, int arg3,
-        int arg4, EyeParameter arg5, ViewerPose arg6) {
+    public void reshapeForEye(GLAutoDrawable drawable, int x, int y, int w,
+        int h, EyeParameter arg5, ViewerPose arg6) {
       // TODO Auto-generated method stub
-      
+
     }
   }
 
