@@ -114,7 +114,7 @@ public class OculusRift extends PGraphics3D {
   // Enable head tracking
   public boolean enableHeadTracking() {
     Hmd.initialize();
-    hmd = Hmd.create(0);
+    hmd = Hmd.create();
     if (hmd == null) {
       isUsingHeadTracking = false;
     } else {
@@ -219,7 +219,9 @@ public class OculusRift extends PGraphics3D {
   }
 
   private PMatrix3D getMatrixFromSensor() {
-    TrackingState sensorState = hmd.getSensorState(Hmd.getTimeInSeconds());
+    TrackingState sensorState = hmd.getTrackingState(Hmd.getTimeInSeconds()); 
+    
+    
     OvrVector3f pos = sensorState.HeadPose.Pose.Position;
     OvrQuaternionf quat = sensorState.HeadPose.Pose.Orientation;
     return calcMatrix(pos.x, pos.y, pos.z, quat.x, quat.y, quat.z, quat.w);
